@@ -23,7 +23,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         })
         .max()
-        .unwrap();
+        .unwrap_or_default();
 
     println!("{}", highest);
 
