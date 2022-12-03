@@ -48,9 +48,11 @@ impl TryFrom<String> for Rucksack {
     type Error = String;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        let items: Result<Vec<Item>, String> = value.chars().map(|x| x.try_into()).collect();
-
-        items.map(|contents| Rucksack { contents })
+        value
+            .chars()
+            .map(|x| x.try_into())
+            .collect::<Result<Vec<Item>, _>>()
+            .map(|contents| Rucksack { contents })
     }
 }
 
