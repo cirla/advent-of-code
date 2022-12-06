@@ -1,1 +1,1 @@
-cd tuning && cargo run -- ../../input.txt
+cd tuning && cargo run -- ../../input.txt 4
