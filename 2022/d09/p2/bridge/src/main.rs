@@ -94,15 +94,13 @@ impl Rope {
 
     pub fn move_head(&mut self, motion: Motion) {
         for _ in 0..motion.steps {
-            self.move_head_one(motion.direction.clone());
+            self.knots[0].r#move(motion.direction);
+            self.catch_up();
         }
     }
 
-    pub fn move_head_one(&mut self, dir: Direction) {
-        // move head
-        self.knots[0].r#move(dir);
-
-        // go through each pair of adjacent knots catching up
+    fn catch_up(&mut self) {
+        // go through each pair of adjacent knots
         for i in 0..self.knots.len() - 1 {
             // if the next knot is still touching, nothing more to do
             if &self.knots[i] == &self.knots[i + 1] || self.knots[i].is_touching(&self.knots[i + 1])
@@ -113,30 +111,14 @@ impl Rope {
             // catch up
             if self.knots[i].x == self.knots[i + 1].x {
                 // same col
-                match (self.knots[i].y - self.knots[i + 1].y).signum() {
-                    1 => self.knots[i + 1].r#move(Direction::Up),
-                    -1 => self.knots[i + 1].r#move(Direction::Down),
-                    _ => panic!("Unreachable"),
-                }
+                self.knots[i + 1].y += (self.knots[i].y - self.knots[i + 1].y).signum();
             } else if self.knots[i].y == self.knots[i + 1].y {
                 // same row
-                match (self.knots[i].x - self.knots[i + 1].x).signum() {
-                    1 => self.knots[i + 1].r#move(Direction::Right),
-                    -1 => self.knots[i + 1].r#move(Direction::Left),
-                    _ => panic!("Unreachable"),
-                }
+                self.knots[i + 1].x += (self.knots[i].x - self.knots[i + 1].x).signum();
             } else {
                 // diagonal
-                match (self.knots[i].x - self.knots[i + 1].x).signum() {
-                    1 => self.knots[i + 1].r#move(Direction::Right),
-                    -1 => self.knots[i + 1].r#move(Direction::Left),
-                    _ => panic!("Unreachable"),
-                };
-                match (self.knots[i].y - self.knots[i + 1].y).signum() {
-                    1 => self.knots[i + 1].r#move(Direction::Up),
-                    -1 => self.knots[i + 1].r#move(Direction::Down),
-                    _ => panic!("Unreachable"),
-                };
+                self.knots[i + 1].x += (self.knots[i].x - self.knots[i + 1].x).signum();
+                self.knots[i + 1].y += (self.knots[i].y - self.knots[i + 1].y).signum();
             }
 
             // if next knot is the tail, update visited
