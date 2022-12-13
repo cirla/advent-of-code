@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{BinaryHeap, HashSet};
 use std::env;
 use std::error::Error;
 use std::fs::File;
@@ -57,7 +57,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .filter_map(|x| x.parse().ok())
         .collect();
 
-    let mut packets = reader
+    let decoder_key: usize = reader
         .lines()
         .filter_map(|line| {
             line.ok()
@@ -65,14 +65,11 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .and_then(|line| line.parse().ok())
         })
         .chain(dividers.iter().cloned())
-        .collect::<Vec<Data>>();
-
-    packets.sort();
-
-    let decoder_key: usize = packets
-        .iter()
+        .collect::<BinaryHeap<Data>>()
+        .into_sorted_vec()
+        .into_iter()
         .enumerate()
-        .filter_map(|(i, packet)| dividers.contains(packet).then_some(i + 1))
+        .filter_map(|(i, packet)| dividers.contains(&packet).then_some(i + 1))
         .product();
 
     println!("{}", decoder_key);
