@@ -1,14 +1,14 @@
 use std::cmp::Ordering;
+use std::collections::HashSet;
 use std::env;
 use std::error::Error;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::str::FromStr;
 
-use itertools::Itertools;
 use serde::Deserialize;
 
-#[derive(Clone, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Deserialize, Eq, Hash, PartialEq)]
 #[serde(untagged)]
 pub enum Data {
     Integer(u32),
@@ -52,25 +52,30 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let reader = io::BufReader::new(input);
 
-    let idx_sum: usize = reader
-        .lines()
-        .filter_map(|line| line.ok())
-        .group_by(|line| !line.is_empty())
+    let dividers: HashSet<Data> = ["[[2]]", "[[6]]"]
         .into_iter()
-        .filter_map(|(key, group)| {
-            key.then(|| {
-                group
-                    .map(|line| line.parse())
-                    .collect::<Result<Vec<Data>, _>>()
-                    .ok()
-            })
-            .flatten()
-        })
-        .enumerate()
-        .filter_map(|(i, packets)| (packets[0] < packets[1]).then_some(i + 1))
-        .sum();
+        .filter_map(|x| x.parse().ok())
+        .collect();
 
-    println!("{}", idx_sum);
+    let mut packets = reader
+        .lines()
+        .filter_map(|line| {
+            line.ok()
+                .and_then(|line| if line.is_empty() { None } else { Some(line) })
+                .and_then(|line| line.parse().ok())
+        })
+        .chain(dividers.iter().cloned())
+        .collect::<Vec<Data>>();
+
+    packets.sort();
+
+    let decoder_key: usize = packets
+        .iter()
+        .enumerate()
+        .filter_map(|(i, packet)| dividers.contains(packet).then_some(i + 1))
+        .product();
+
+    println!("{}", decoder_key);
 
     Ok(())
 }
