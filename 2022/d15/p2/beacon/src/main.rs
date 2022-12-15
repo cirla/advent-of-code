@@ -1,3 +1,4 @@
+use std::cmp;
 use std::collections::{BTreeSet, HashMap};
 use std::env;
 use std::error::Error;
@@ -5,7 +6,9 @@ use std::fs::File;
 use std::io::{self, BufRead};
 use std::str::FromStr;
 
-#[derive(PartialEq)]
+use rayon::prelude::*;
+
+#[derive(Debug, PartialEq)]
 pub struct Point {
     pub x: isize,
     pub y: isize,
@@ -41,7 +44,7 @@ impl FromStr for Point {
     }
 }
 
-#[derive(Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Eq, Debug, Ord, PartialEq, PartialOrd)]
 pub struct RangeInclusive {
     pub start: isize,
     pub end: isize,
@@ -119,7 +122,15 @@ impl Tunnels {
         }
     }
 
-    pub fn count_empty(&self, y: isize) -> usize {
+    pub fn find_all_empty(&self, range: &RangeInclusive) -> Vec<Point> {
+        (range.start..=range.end)
+            .into_par_iter()
+            .map(|y| self.find_empty(y, range).into_iter())
+            .flatten_iter()
+            .collect()
+    }
+
+    pub fn find_empty(&self, y: isize, range: &RangeInclusive) -> Vec<Point> {
         let mut ranges = BTreeSet::new();
 
         // get ranges of x values inside each sensor's exclusive zone
@@ -129,12 +140,21 @@ impl Tunnels {
 
             if closest_distance <= s.beacon_distance {
                 let offset = (s.beacon_distance - closest_distance) as isize;
-                ranges.insert(RangeInclusive::new(s.loc.x - offset, s.loc.x + offset));
+                ranges.insert(RangeInclusive::new(
+                    cmp::max(range.start, s.loc.x - offset),
+                    cmp::min(range.end, s.loc.x + offset),
+                ));
             }
         }
 
+        let not_empty = self.known_not_empty.get(&y);
+        not_empty.map(|xs| {
+            xs.iter()
+                .map(|x| ranges.insert(RangeInclusive::new(*x, *x)))
+        });
+
         if ranges.is_empty() {
-            0
+            Vec::new()
         } else {
             // merge overlapping ranges
             let mut merged_ranges = Vec::new();
@@ -149,17 +169,15 @@ impl Tunnels {
                 }
             }
 
-            // sum lengths of ranges, accounting for sensors within the ranges
-            let not_empty = self.known_not_empty.get(&y);
-            merged_ranges
-                .iter()
-                .map(|r| {
-                    r.len()
-                        - not_empty
-                            .map(|x| x.range(r.start..=r.end).count())
-                            .unwrap_or(0)
-                })
-                .sum()
+            if merged_ranges.len() == 1 {
+                Vec::new()
+            } else {
+                merged_ranges
+                    .into_iter()
+                    .skip(1)
+                    .map(|r| Point::new(r.start - 1, y))
+                    .collect()
+            }
         }
     }
 }
@@ -167,7 +185,8 @@ impl Tunnels {
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
     let input = File::open(&args[1])?;
-    let row: isize = args[2].parse()?;
+    let start: isize = args[2].parse()?;
+    let end: isize = args[3].parse()?;
 
     let reader = io::BufReader::new(input);
 
@@ -177,7 +196,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         .collect();
 
     let tunnels = Tunnels::new(sensors);
-    println!("{}", tunnels.count_empty(row));
+    let empty = tunnels.find_all_empty(&RangeInclusive::new(start, end));
+
+    assert!(empty.len() == 1);
+
+    let beacon = &empty[0];
+    println!("{}", beacon.x * 4_000_000 + beacon.y);
 
     Ok(())
 }
