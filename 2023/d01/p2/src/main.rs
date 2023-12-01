@@ -4,49 +4,51 @@ use std::error::Error;
 use std::fs::File;
 use std::io::{self, BufRead};
 
-use regex::{Captures, Regex};
+use regex::{Match, Regex};
+
+const DIGITS: [&str; 9] = [
+    "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+];
+
+const DIGITS_REV: [&str; 9] = [
+    "eno", "owt", "eerht", "ruof", "evif", "xis", "neves", "thgie", "enin",
+];
 
 // trie regex - see create_regex.py
-const RE_DIGITS: &str = r"(?:f(?:ive|our)|s(?:even|ix)|t(?:hree|wo)|eight|nine|one)";
+// matches any numeric or word digit efficiently
+const RE_DIGITS: &str = r"(?:f(?:ive|our)|s(?:even|ix)|t(?:hree|wo)|eight|nine|one|\d)";
+const RE_DIGITS_REV: &str = r"(?:e(?:n(?:in|o)|erht|vif)|neves|thgie|ruof|owt|xis|\d)";
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
     let input = File::open(&args[1])?;
     let reader = io::BufReader::new(input);
 
-    let digit_map: HashMap<&'static str, &'static str> = HashMap::from_iter(
-        [
-            ("one", "1"),
-            ("two", "2"),
-            ("three", "3"),
-            ("four", "4"),
-            ("five", "5"),
-            ("six", "6"),
-            ("seven", "7"),
-            ("eight", "8"),
-            ("nine", "9"),
-        ]
-        .into_iter(),
-    );
+    let re_digits = Regex::new(RE_DIGITS).unwrap();
+    let re_digits_rev = Regex::new(RE_DIGITS_REV).unwrap();
 
-    let re = Regex::new(RE_DIGITS).unwrap();
+    // map digit word to digit value, e.g. "two" -> 2
+    let mut digit_map: HashMap<&'static str, usize> =
+        HashMap::from_iter(DIGITS.iter().enumerate().map(|(i, d)| (*d, i + 1)));
 
-    let calibration_value: u32 = reader
+    // also map reversed word to digit value, e.g. "owt" -> 2
+    digit_map.extend(DIGITS_REV.iter().enumerate().map(|(i, d)| (*d, i + 1)));
+
+    // convert regex match to usize
+    let to_digit = |m: Match| match m.len() {
+        1 => m.as_str().parse::<usize>().unwrap(),
+        _ => digit_map[m.as_str()],
+    };
+
+    let calibration_value: usize = reader
         .lines()
         .filter_map(|line| line.ok())
         .filter_map(|line| {
-            // TODO: just replace the first and last
-            // this doesn't replace overlaps so there may be overlapping
-            // digit words masking the last digit
-            let line = re.replace_all(line.as_ref(), |caps: &Captures| digit_map[&caps[0]]);
-
-            let mut digits = line
-                .chars()
-                .filter_map(|c| c.is_digit(10).then_some(c as u32 - '0' as u32));
-
-            digits
-                .next()
-                .and_then(|first| Some((first * 10) + digits.last().unwrap_or(first)))
+            re_digits.find(&line).map(to_digit).and_then(|first| {
+                let rev = &line.chars().rev().collect::<String>();
+                let last = re_digits_rev.find(&rev).map(to_digit).unwrap_or(first);
+                Some(first * 10 + last)
+            })
         })
         .sum();
 
