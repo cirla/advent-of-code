@@ -8,7 +8,7 @@ use itertools::{
     FoldWhile::{Continue, Done},
     Itertools,
 };
-use rayon::prelude::*;
+use num::integer::lcm;
 
 #[derive(Debug)]
 enum Direction {
@@ -75,34 +75,57 @@ impl Map {
         Ok(Self { directions, nodes })
     }
 
-    fn start<'a>(&'a self) -> Vec<&'a String> {
-        self.nodes.keys().filter(|n| n.ends_with('A')).collect()
+    fn start<'a>(&'a self) -> Vec<(&'a String, usize)> {
+        // get all starting nodes and keep a count of how many steps
+        // it takes to get to each one from the beginning
+        self.nodes
+            .keys()
+            .filter_map(|n| n.ends_with('A').then_some((n, 0usize)))
+            .collect::<Vec<_>>()
     }
 
-    fn is_end(nodes: &Vec<&String>) -> bool {
-        nodes.par_iter().all(|n| n.ends_with('Z'))
+    fn left<'a>(&'a self, node: &'a String) -> &'a String {
+        &self.nodes[node].0
+    }
+
+    fn right<'a>(&'a self, node: &'a String) -> &'a String {
+        &self.nodes[node].1
     }
 
     pub fn traverse(&self) -> usize {
         self.directions
             .iter()
             .cycle()
-            .fold_while((0, self.start()), |(i, mut nodes), dir| {
-                nodes.par_iter_mut().for_each(|node| {
-                    *node = match dir {
-                        Direction::Left => &self.nodes[*node].0,
-                        Direction::Right => &self.nodes[*node].1,
-                    }
-                });
+            .fold_while(self.start(), |mut nodes, dir| {
+                let next = match dir {
+                    Direction::Left => Self::left,
+                    Direction::Right => Self::right,
+                };
 
-                if Self::is_end(&nodes) {
-                    Done((i + 1, nodes))
+                // ignore nodes that are already on an end node as we would
+                // eventually get back to them. after finding the counts for
+                // every starting node to an ending node, we can calculate
+                // the least common multiple of the counts for all nodes
+                // where they would re-align
+                nodes
+                    .iter_mut()
+                    .filter(|(node, _)| !node.ends_with('Z'))
+                    .for_each(|(node, count)| {
+                        *node = next(&self, node);
+                        *count += 1;
+                    });
+
+                if nodes.iter().all(|(node, _)| node.ends_with('Z')) {
+                    Done(nodes)
                 } else {
-                    Continue((i + 1, nodes))
+                    Continue(nodes)
                 }
             })
             .into_inner()
-            .0
+            .into_iter()
+            .map(|(_, count)| count)
+            .reduce(lcm)
+            .unwrap()
     }
 }
 
