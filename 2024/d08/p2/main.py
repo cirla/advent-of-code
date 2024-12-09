@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from collections import defaultdict
 from itertools import chain, combinations
-from typing import Iterable, List, Mapping, NamedTuple, Set
+from typing import List, Mapping, NamedTuple, Set
 
 Frequency = str
 
@@ -29,12 +29,13 @@ class Map:
                 if char != ".":
                     self.antennae[char].add(Location(row, col))
 
-    def antinodes(self, freq: Frequency) -> Iterable[Location]:
+    def antinodes(self, freq: Frequency) -> Set[Location]:
+        locs = set()
+
         for a, b in combinations(self.antennae[freq], 2):
             row_delta = a.row - b.row
             col_delta = a.col - b.col
 
-            locs = set()
             loc = a
             while self.contains(loc):
                 locs.add(loc)
@@ -45,8 +46,7 @@ class Map:
                 locs.add(loc)
                 loc = loc.translate(-row_delta, -col_delta)
 
-            for loc in locs:
-                yield loc
+        return locs
 
     def contains(self, loc: Location) -> bool:
         return loc[0] >= 0 and loc[0] < self.rows and loc[1] >= 0 and loc[1] < self.cols
